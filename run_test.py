@@ -84,12 +84,6 @@ def main(filename, systemname, print_us, print_ont, statistics, link, prolog, js
 
 	matr_time = timeit.default_timer() - start_matr_time
 
-	# Print details per user story, if argument '-u'/'--print_us' is chosen
-	if print_us:
-		print("Details:\n")
-		for us in us_instances:
-			Printer.print_us_data(us)
-
 	# Generate the ontology
 	start_gen_time = timeit.default_timer()
 
@@ -97,31 +91,20 @@ def main(filename, systemname, print_us, print_ont, statistics, link, prolog, js
 	out = patterns.make(systemname, threshold, link)
 	output_ontology, output_prolog, output_ontobj, output_prologobj, onto_per_role = out
 
-	print("HEY THIS IS THE OUTPUT_ONTOBJ WITH THE CLASSES APPARENTLY???")
-	print(output_ontobj.classes)
 	all_classes_list = []
+	i = 0
 	for class_vn in output_ontobj.classes:
-		one_concept = {'class_name': class_vn.name, 'parent_name': class_vn.parent,
+		one_concept = {'id': i, 'class_name': class_vn.name, 'parent_name': class_vn.parent,
                        'occurs_in': occurence_list(class_vn.stories), 'weight': '0', 'group': class_vn.is_role}
 		all_classes_list.append(one_concept)
-
-	print(all_classes_list)
-	# nodes = []
-	# for cl in all_classes_list:
-	# 	print(cl)
-	# 	nodes.append({"label": cl['class_name']})
-	# taking out class_id from the nodes. idk if this will bite me later.
-	nodes = [{"label": cl["class_name"], "weight": cl["weight"]} for cl in all_classes_list]
-	# print(nodes)
-	print('IDK WHAT THIS IS BUT IMMA PRINT IT OUT TOO')
+		i += 1
+	nodes = [{"id": cl["id"], "label": cl["class_name"], "weight": cl["weight"]} for cl in all_classes_list]
 	relationships_query = output_prologobj.relationships
 
 	all_relationships_list = []
 	for relationship in relationships_query:
 		one_concept = {'relationship_domain': relationship.domain, 'relationship_name': relationship.name, 'relationship_range': relationship.range}
 		all_relationships_list.append(one_concept)
-
-	print(all_relationships_list)
 
 	edges_id_list = []
 	concepts_query = []
@@ -134,15 +117,10 @@ def main(filename, systemname, print_us, print_ont, statistics, link, prolog, js
 		one_concept = {'class_id': i, 'class_name': class_vn['class_name'], 'parent_name': class_vn['parent_name'], 'weight': '0', 'group': class_vn['group']}
 		concepts_query.append(one_concept)
 		i += 1
-
-	# print(concepts_query)
 	for concept in concepts_query:
-		print(concept)
+		# print(concept)
 		concepts_dict[concept['class_id']] = concept['class_name']
 		concepts_dict_list.append([concept['class_id'], concept['class_name']])
-
-	print('THIS IS WHAT UR CURRENTLY LOOKING AT')
-	print(concepts_dict_list)
 	i = 0
 	for rel in all_relationships_list: #app.py 868
 		# print(rel)
@@ -156,105 +134,17 @@ def main(filename, systemname, print_us, print_ont, statistics, link, prolog, js
 				y = concept[0]
 
 		if rel['relationship_name'] == 'isa':
-			edges_id_dict = {'id': i, 'from': x, 'to': y, 'label': rel['relationship_name'], 'dashes': "true"}
+			edges_id_dict = {'from': x, 'to': y, 'label': rel['relationship_name'], 'dashes': "true"}
 		else:
-			edges_id_dict = {'id': i, 'from': x, 'to': y, 'label': rel['relationship_name']}
+			edges_id_dict = {'from': x, 'to': y, 'label': rel['relationship_name']}
 		i += 1
         # ELSE??
 		edges_id_list.append(edges_id_dict)
 
-	print(edges_id_list)
+	print({'nodes': nodes, 'edges': edges_id_list})
+	return({'nodes': nodes, 'edges': edges_id_list})
 
 	# Print out the ontology in the terminal, if argument '-o'/'--print_ont' is chosen
-	if print_ont:
-		Printer.print_head("MANCHESTER OWL")
-		print(output_ontology)
-
-	gen_time = timeit.default_timer() - start_gen_time
-
-	# Gather statistics and print the results
-	stats_time = 0
-	if statistics:
-		start_stats_time = timeit.default_timer()
-
-		statsarr = Statistics.to_stats_array(us_instances)
-
-		Printer.print_head("USER STORY STATISTICS")
-		Printer.print_stats(statsarr[0], True)
-		Printer.print_stats(statsarr[1], True)
-		Printer.print_subhead("Term - by - User Story Matrix ( Terms w/ total weight 0 hidden )")
-		hide_zero = m[(m['sum'] > 0)]
-		print(hide_zero)
-
-		stats_time = timeit.default_timer() - start_stats_time
-
-	# Write output files
-	w = Writer()
-
-	folder = "output/" + str(systemname)
-	reports_folder = folder + "/reports"
-	stats_folder = reports_folder + "/stats"
-
-	outputfile = w.make_file(folder + "/ontology", str(systemname), "omn", output_ontology)
-	files = [["Manchester Ontology", outputfile]]
-
-	outputcsv = ""
-	sent_outputcsv = ""
-	matrixcsv = ""
-
-	if statistics:
-		files.append(["General statistics", w.make_file(stats_folder, str(systemname), "csv", statsarr[0])])
-		files.append(["Term-by-User Story matrix", w.make_file(stats_folder, str(systemname) + "-term_by_US_matrix", "csv", m)])
-		files.append(["Sentence statistics", w.make_file(stats_folder, str(systemname) + "-sentences", "csv", statsarr[1])])
-	if prolog:
-		files.append(["Prolog", w.make_file(folder + "/prolog", str(systemname), "pl", output_prolog)])
-	if json:
-		output_json_li = [str(us.toJSON()) for us in us_instances]
-		output_json = "\n".join(output_json_li)
-		files.append(["JSON", w.make_file(folder + "/json", str(systemname) + "-user_stories", "json", output_json)])
-	if per_role:
-		for o in onto_per_role:
-			files.append(["Individual Ontology for '" + str(o[0]) + "'", w.make_file(folder + "/ontology", str(systemname) + "-" + str(o[0]), "omn", o[1])])
-
-	# Print the used ontology generation settings
-	Printer.print_gen_settings(matrix, base, threshold)
-
-	# Print details of the generation
-	Printer.print_details(fail, success, nlp_time, parse_time, matr_time, gen_time, stats_time)
-
-	report_dict = {
-		"stories": us_instances,
-		"failed_stories": failed_stories,
-		"systemname": systemname,
-		"us_success": success,
-		"us_fail": fail,
-		"times": [["Initializing Natural Language Processor (<em>spaCy</em> v" + pkg_resources.get_distribution("spacy").version + ")" , nlp_time], ["Mining User Stories", parse_time], ["Creating Factor Matrix", matr_time], ["Generating Manchester Ontology", gen_time], ["Gathering statistics", stats_time]],
-		"dir": os.path.dirname(os.path.realpath(__file__)),
-		"inputfile": filename,
-		"inputfile_lines": len(set),
-		"outputfiles": files,
-		"threshold": threshold,
-		"base": base,
-		"matrix": matrix,
-		"weights": m['sum'].copy().reset_index().sort_values(['sum'], ascending=False).values.tolist(),
-		"counts": count_matrix.reset_index().values.tolist(),
-		"classes": output_ontobj.classes,
-		"relationships": output_prologobj.relationships,
-		"types": list(count_matrix.columns.values),
-		"ontology": multiline(output_ontology)
-	}
-
-	# Finally, generate a report
-	report = w.make_file(reports_folder, str(systemname) + "_REPORT", "html", generate_report(report_dict))
-	files.append(["Report", report])
-
-	# Print the location and name of all output files
-	for file in files:
-		if str(file[1]) != "":
-			print(str(file[0]) + " file succesfully created at: \"" + str(file[1]) + "\"")
-
-	# Return objects so that they can be used as input for other tools
-	return {'us_instances': us_instances, 'output_ontobj': output_ontobj, 'output_prologobj': output_prologobj, 'matrix': m}
 
 
 def parse(text, id, systemname, nlp, miner):
@@ -376,7 +266,6 @@ def is_valid_file(parser, arg):
         parser.error("Could not find file " + str(arg) + "!")
     else:
         return open(arg, 'r')
-
 
 if __name__ == "__main__":
 	program()
